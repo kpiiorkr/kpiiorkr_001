@@ -1,0 +1,8 @@
+{
+  "name": "한국프로세스혁신협회",
+  "description": "한국프로세스혁신협회(KPII)의 공식 웹사이트입니다. AI 기반 실시간 데이터 연동 기능을 갖추고 있습니다.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
