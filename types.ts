@@ -7,6 +7,17 @@ export type MenuType =
   | '회원사소개' 
   | '설립자소개' 
   | 'Contact us';
+  
+export interface MemberCompany {
+  id: string;
+  name: string;
+  description: string;
+  logo_url: string;
+  website?: string;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface BBSEntry {
   id: string;
