@@ -1,45 +1,36 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-
-import { BBSEntry, RollingImage, AppSettings, MenuType, Inquiry, MemberCompany } from './types.ts';
+import { BBSEntry, RollingImage, AppSettings, MenuType, Inquiry } from './types.ts';
 import { INITIAL_BBS_DATA, INITIAL_ROLLING_IMAGES } from './constants.tsx';
-import { GoogleGenAI, Type } from "@google/genai";
 import { supabase } from './lib/supabase';
 
 const STORAGE_KEYS = {
   BBS: 'kpii_bbs_data',
   SETTINGS: 'kpii_settings',
-  INQUIRIES: 'kpii_inquiries'
+  INQUIRIES: 'kpii_inquiries',
 } as const;
 
 interface AppContextType {
-  currentMenu: MenuType;
-  setCurrentMenu: (menu: MenuType) => void;
-  isAdmin: boolean;
-  setIsAdmin: (val: boolean) => void;
-  isSyncing: boolean;
   bbsData: BBSEntry[];
-  addBbsEntry: (entry: Omit<BBSEntry, 'id' | 'date'>) => void;
-  updateBbsEntry: (id: number, entry: Partial<BBSEntry>) => void;
-  deleteBbsEntry: (id: number) => void;
-  settings: AppSettings;
-  updateRollingImage: (id: number, url: string, link?: string) => void;
-  updateProfileImage: (type: 'founder' | 'chairman' | 'logo', url: string) => Promise<void>;
-  updateAdminPassword: (password: string) => void;
   inquiries: Inquiry[];
-  addInquiry: (inquiry: Omit<Inquiry, 'id' | 'date' | 'status'>) => void;
-  deleteInquiry: (id: number) => void;
-  answerInquiry: (id: number, answer: string) => void;
-  askAI: (question: string) => Promise<string>;
-  memberCompanies: MemberCompany[];
-  addMemberCompany: (company: Omit<MemberCompany, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
-  updateMemberCompany: (id: string, updates: Partial<MemberCompany>) => Promise<void>;
-  deleteMemberCompany: (id: string) => Promise<void>;
+  settings: AppSettings;
+  isAdmin: boolean;
+  isSyncing: boolean;
+  setIsAdmin: (val: boolean) => void;
+  addBBSEntry: (entry: Omit<BBSEntry, 'id' | 'createdAt'>) => void;
+  updateBBSEntry: (id: string, updates: Partial<BBSEntry>) => void;
+  deleteBBSEntry: (id: string) => void;
+  addInquiry: (inquiry: Omit<Inquiry, 'id' | 'createdAt'>) => void;
+  deleteInquiry: (id: string) => void;
+  updateSettings: (updates: Partial<AppSettings>) => void;
+  addRollingImage: (image: Omit<RollingImage, 'id'>) => void;
+  updateRollingImage: (id: string, updates: Partial<RollingImage>) => void;
+  deleteRollingImage: (id: string) => void;
+  updateProfileImage: (type: 'founder' | 'chairman' | 'logo', url: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentMenu, setCurrentMenu] = useState<MenuType>('home');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [bbsData, setBbsData] = useState<BBSEntry[]>(INITIAL_BBS_DATA);
@@ -47,14 +38,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<AppSettings>({
     showSidebar: true,
     rollingImages: INITIAL_ROLLING_IMAGES,
-    founderImageUrl: 'https://raw.githubusercontent.com/kpiiorkr/img/main/founder.png',  // 설립자소개
-    chairmanImageUrl: 'https://raw.githubusercontent.com/kpiiorkr/img/main/kwon.png',    // 회장사소개
+    founderImageUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=600',
+    chairmanImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=600',
     logoImageUrl: 'https://raw.githubusercontent.com/kpiiorkr/img/main/logo.png',
     adminPassword: 'password'
   });
   const [isAdmin, setIsAdminState] = useState(false);
   const [settingsRowId, setSettingsRowId] = useState<string | null>(null);
-  const [memberCompanies, setMemberCompanies] = useState<MemberCompany[]>([]);
 
   // Load from localStorage on mount + Supabase settings 덮어쓰기
   useEffect(() => {
@@ -91,20 +81,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
           setSettingsRowId(data.id);
         }
-
-        // 3) 회원사 목록 로딩
-        const { data: companies, error: companiesError } = await supabase
-          .from('member_companies')
-          .select('*')
-          .order('order_index', { ascending: true });
-
-        if (!companiesError && companies) {
-          setMemberCompanies(companies);
-        }
       } catch (e) {
         console.error("Data recovery failed", e);
       } finally {
-        // Set a small timeout to ensure initial state is stable
         setTimeout(() => setIsInitialized(true), 50);
       }
     };
@@ -130,31 +109,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('kpii_is_admin', String(val));
   }, []);
 
-  const addBbsEntry = useCallback((entry: Omit<BBSEntry, 'id' | 'date'>) => {
+  const addBBSEntry = useCallback((entry: Omit<BBSEntry, 'id' | 'createdAt'>) => {
     const newEntry: BBSEntry = {
       ...entry,
-      id: Date.now(),
-      date: new Date().toISOString().split('T')[0]
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
     };
     setBbsData(prev => [newEntry, ...prev]);
   }, []);
 
-  const updateBbsEntry = useCallback((id: number, updates: Partial<BBSEntry>) => {
+  const updateBBSEntry = useCallback((id: string, updates: Partial<BBSEntry>) => {
     setBbsData(prev => prev.map(entry =>
       entry.id === id ? { ...entry, ...updates } : entry
     ));
   }, []);
 
-  const deleteBbsEntry = useCallback((id: number) => {
+  const deleteBBSEntry = useCallback((id: string) => {
     setBbsData(prev => prev.filter(entry => entry.id !== id));
   }, []);
 
-  const updateRollingImage = useCallback((id: number, url: string, link?: string) => {
+  const addInquiry = useCallback((inquiry: Omit<Inquiry, 'id' | 'createdAt'>) => {
+    const newInquiry: Inquiry = {
+      ...inquiry,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    setInquiries(prev => [newInquiry, ...prev]);
+  }, []);
+
+  const deleteInquiry = useCallback((id: string) => {
+    setInquiries(prev => prev.filter(inq => inq.id !== id));
+  }, []);
+
+  const updateSettings = useCallback((updates: Partial<AppSettings>) => {
+    setSettings(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const addRollingImage = useCallback((image: Omit<RollingImage, 'id'>) => {
+    const newImage: RollingImage = { ...image, id: crypto.randomUUID() };
+    setSettings(prev => ({
+      ...prev,
+      rollingImages: [...prev.rollingImages, newImage]
+    }));
+  }, []);
+
+  const updateRollingImage = useCallback((id: string, updates: Partial<RollingImage>) => {
     setSettings(prev => ({
       ...prev,
       rollingImages: prev.rollingImages.map(img =>
-        img.id === id ? { ...img, url, link: link ?? img.link } : img
+        img.id === id ? { ...img, ...updates } : img
       )
+    }));
+  }, []);
+
+  const deleteRollingImage = useCallback((id: string) => {
+    setSettings(prev => ({
+      ...prev,
+      rollingImages: prev.rollingImages.filter(img => img.id !== id)
     }));
   }, []);
 
@@ -165,7 +176,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 2) Supabase에도 저장
       try {
-        if (!settingsRowId) return; // 아직 Supabase에서 id를 못 읽었으면 그냥 로컬만 반영
+        if (!settingsRowId) return;
 
         const payload: any = {};
         if (type === 'logo') payload.logo_image_url = url;
@@ -189,153 +200,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [settingsRowId]
   );
 
-  const updateAdminPassword = useCallback((password: string) => {
-    setSettings(prev => ({ ...prev, adminPassword: password }));
-  }, []);
-
-  const addInquiry = useCallback((inquiry: Omit<Inquiry, 'id' | 'date' | 'status'>) => {
-    const newInquiry: Inquiry = {
-      ...inquiry,
-      id: Date.now(),
-      date: new Date().toISOString().split('T')[0],
-      status: 'pending'
-    };
-    setInquiries(prev => [newInquiry, ...prev]);
-  }, []);
-
-  const deleteInquiry = useCallback((id: number) => {
-    setInquiries(prev => prev.filter(inq => inq.id !== id));
-  }, []);
-
-  const answerInquiry = useCallback((id: number, answer: string) => {
-    setInquiries(prev => prev.map(inq =>
-      inq.id === id ? { ...inq, answer, status: 'answered' as const } : inq
-    ));
-  }, []);
-
-  const askAI = useCallback(async (question: string): Promise<string> => {
-    try {
-      setIsSyncing(true);
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("Gemini API 키가 설정되지 않았습니다.");
-      }
-
-      const genAI = new GoogleGenAI({ apiKey });
-
-      const prompt = `당신은 한국 공공조달 혁신 연구원(KPII)의 AI 어시스턴트입니다.
-다음 질문에 대해 간결하고 전문적으로 답변해주세요:
-
-질문: ${question}
-
-답변은 3-4문장으로 요약하고, 필요하면 링크나 추가 정보를 제안해주세요.`;
-
-      const response = await genAI.models.generate({
-        model: "gemini-2.0-flash-exp",
-        prompt,
-        config: {
-          maxOutputTokens: 500,
-          temperature: 0.7,
-        }
-      });
-
-      if (!response?.text) {
-        throw new Error("AI 응답을 받지 못했습니다.");
-      }
-
-      return response.text;
-    } catch (error) {
-      console.error("AI 질의 실패:", error);
-      throw new Error("AI 서비스에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
-  // 회원사 추가
-  const addMemberCompany = useCallback(async (company: Omit<MemberCompany, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('member_companies')
-        .insert([company])
-        .select()
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setMemberCompanies(prev => [...prev, data].sort((a, b) => a.order_index - b.order_index));
-      }
-    } catch (e) {
-      console.error('회원사 추가 실패:', e);
-      alert('회원사 추가에 실패했습니다.');
-    }
-  }, []);
-
-  // 회원사 수정
-  const updateMemberCompany = useCallback(async (id: string, updates: Partial<MemberCompany>) => {
-    try {
-      const { data, error } = await supabase
-        .from('member_companies')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setMemberCompanies(prev => 
-          prev.map(c => c.id === id ? data : c).sort((a, b) => a.order_index - b.order_index)
-        );
-      }
-    } catch (e) {
-      console.error('회원사 수정 실패:', e);
-      alert('회원사 수정에 실패했습니다.');
-    }
-  }, []);
-
-  // 회원사 삭제
-  const deleteMemberCompany = useCallback(async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('member_companies')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      setMemberCompanies(prev => prev.filter(c => c.id !== id));
-    } catch (e) {
-      console.error('회원사 삭제 실패:', e);
-      alert('회원사 삭제에 실패했습니다.');
-    }
-  }, []);
-
   const value: AppContextType = {
-    currentMenu,
-    setCurrentMenu,
-    isAdmin,
-    setIsAdmin,
-    isSyncing,
     bbsData,
-    addBbsEntry,
-    updateBbsEntry,
-    deleteBbsEntry,
-    settings,
-    updateRollingImage,
-    updateProfileImage,
-    updateAdminPassword,
     inquiries,
+    settings,
+    isAdmin,
+    isSyncing,
+    setIsAdmin,
+    addBBSEntry,
+    updateBBSEntry,
+    deleteBBSEntry,
     addInquiry,
     deleteInquiry,
-    answerInquiry,
-    askAI,
-    memberCompanies,
-    addMemberCompany,
-    updateMemberCompany,
-    deleteMemberCompany,
+    updateSettings,
+    addRollingImage,
+    updateRollingImage,
+    deleteRollingImage,
+    updateProfileImage,
   };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return React.createElement(AppContext.Provider, { value }, children);
 };
 
 export const useApp = () => {
-  const context = useContext(
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within AppProvider');
+  }
+  return context;
+};
