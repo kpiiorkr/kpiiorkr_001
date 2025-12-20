@@ -38,11 +38,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<AppSettings>({
     showSidebar: true,
     rollingImages: INITIAL_ROLLING_IMAGES,
-    founderImageUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=600',
-    chairmanImageUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=600',
+    founderImageUrl: 'https://raw.githubusercontent.com/kpiiorkr/img/main/founder.png',
+    chairmanImageUrl: 'https://raw.githubusercontent.com/kpiiorkr/img/main/kwon.png',
     logoImageUrl: 'https://raw.githubusercontent.com/kpiiorkr/img/main/logo.png',
     adminPassword: 'password'
   });
+
   const [isAdmin, setIsAdminState] = useState(false);
   const [settingsRowId, setSettingsRowId] = useState<string | null>(null);
 
